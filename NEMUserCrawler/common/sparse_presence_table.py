@@ -87,14 +87,15 @@ class SparsePresenceTable():
                 block_size))
         byte_count = 0
         for i in range(block_amount):
-            not_vacant = unpack_from_file("!?")
+            not_vacant, = unpack_from_file("!?")
             if not not_vacant:
                 continue
             else:
                 block = bytearray(file.read(self._block_size))
                 if len(block) != self._block_size:
-                    raise SerializationError("file too small: at block {}, got {}/{} bytes".format(
-                        i,
+                    raise SerializationError("file ended unexpectedly: at block {}/{}, got {}/{} bytes".format(
+                        i + 1,
+                        block_amount,
                         len(block),
                         self._block_size))
                 byte_count += len(block)
