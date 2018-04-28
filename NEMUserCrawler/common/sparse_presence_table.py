@@ -87,8 +87,8 @@ class SparsePresenceTable():
                 block_size))
         byte_count = 0
         for i in range(block_amount):
-            vacant = unpack_from_file("!?")
-            if vacant:
+            not_vacant = unpack_from_file("!?")
+            if not not_vacant:
                 continue
             else:
                 block = bytearray(file.read(self._block_size))

@@ -99,13 +99,16 @@ class SparsePresenceTableTest(unittest.TestCase):
                 present = [random.randint(0, 10**8 - 1) for _ in range(1000)]
                 for no in present:
                     table.set_present(no)
+                empty_block_amount = table._table.count(None)
                 file = BytesIO()
                 byte_count = table.dump_to_file(file)
                 #self.assertGreater(len(file.getbuffer()), byte_count)
                 #self.assertGreater(len(file.getbuffer()), ceil(10**6 / 8) * 100)
                 # TODO: test file size accurately
                 file.seek(0)
+                table = SparsePresenceTable(8, 2) # create new empty table
                 table.load_from_file(file)
+                self.assertEqual(empty_block_amount, table._table.count(None))
                 for no in present:
                     self.assertIn(no, table)
             
