@@ -5,7 +5,7 @@ import scrapy
 import logging
 from urllib.parse import urlencode
 from .. import common
-from ..items import UserProfile
+from ..items import UserProfile, Song
 
 
 class UserSpider(scrapy.Spider):
@@ -32,11 +32,12 @@ for each follower |    |parse_favorite_songs|
                                  +----------+
                                    if more
     """
+    database_name = "nem"
     name = "user"
     allowed_domains = [common.nem.HOST]
     start_urls = [common.nem.rel2abs("discover")]
-    custom_settings = {'DUPEFILTER_CLASS': "NEMUserCrawler.dupefilter.NemUserIDFilter"
-                       ''}
+    custom_settings = {'DUPEFILTER_CLASS': "NEMUserCrawler.dupefilter.NemUserIDFilter",
+                       'COOKIES_ENABLED':  False}
 
     def parse(self, response):
         for user_id in response.xpath("//a[starts-with(@href, '/user/home')]/@href").re(r"(?<=id=)\d+"):
@@ -80,7 +81,7 @@ for each follower |    |parse_favorite_songs|
                                )),
                                callback=self.parse_playlists,
                                meta={'user_profile': user_profile},
-                               priority=2)
+                               priority=20)
 
     def parse_playlists(self, response):
         d = json.loads(response.body.decode("utf-8"))
@@ -93,8 +94,9 @@ for each follower |    |parse_favorite_songs|
             yield response.follow("/playlist?id={}".format(d['playlist'][0]['id']),
                                   method="GET",
                                   callback=self.parse_favorite_songs,
-                                  meta={'user_profile': up, 'final_stage': True},
-                                  priority=3)
+                                  meta={'user_profile': up,
+                                        'final_stage': True},
+                                  priority=30)
         except KeyError:
             self.log("Error when parsing the playlists of user {}({}).".format(
                 up.name, up.id), logging.WARNING)
@@ -103,8 +105,9 @@ for each follower |    |parse_favorite_songs|
         up: UserProfile = response.meta.get('user_profile')
         fav_songs = []
         for song in response.xpath("//ul[@class='f-hide']/li/a"):
-            fav_songs.append((song.xpath("@href").re("id=(.+)")
-                              [0], song.xpath("text()").extract_first()))
+            song_ = Song(id=int(song.xpath("@href").re("id=(.+)")[0]), name=song.xpath("text()").extract_first())
+            yield song_
+            fav_songs.append(song_['id'])
         up['favorite_songs'] = fav_songs
         yield up
 
@@ -125,7 +128,7 @@ for each follower |    |parse_favorite_songs|
                                meta={"followers_user_id": user_id,
                                      "followers_offset": offset,
                                      "followers_limit": limit},
-                               priority=1)
+                               priority=10)
 
     def parse_followers(self, response):
         d = json.loads(response.body.decode("utf-8"))

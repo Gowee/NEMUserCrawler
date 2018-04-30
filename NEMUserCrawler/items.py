@@ -7,10 +7,21 @@
 
 import scrapy
 
+class MongoItem(scrapy.Item):
+    upsert = True
+    to__id = "id"
 
-class UserProfile(scrapy.Item):
+class UserProfile(MongoItem):
+    collection_name = "users"
+
     id = scrapy.Field()
     name = scrapy.Field()
     avatar_url = scrapy.Field()
     description = scrapy.Field()
     favorite_songs = scrapy.Field()
+
+class Song(MongoItem):
+    collection_name = "songs"
+
+    id = scrapy.Field()
+    name = scrapy.Field()
