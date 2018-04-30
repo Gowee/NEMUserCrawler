@@ -11,6 +11,7 @@ import txmongo
 from pymongo.uri_parser import parse_uri
 from pymongo.errors import DuplicateKeyError
 from twisted.internet import defer
+from scrapy.exceptions import NotConfigured
 
 
 class TxMongoPipeline(object):
@@ -48,7 +49,7 @@ class TxMongoPipeline(object):
                 " or the `database_name` attribute of spiders".format(
                     self.__class__.__name__)
             self.logger(e)
-            raise ValueError(e)
+            raise NotConfigured(e)
         self.connection = yield txmongo.connection.ConnectionPool(self.mongo_uri)
         self.db = self.connection[self.db_name]
 
@@ -84,4 +85,5 @@ class TxMongoPipeline(object):
                     result = None
             else:
                 result = yield self.db[collection_name].update({'_id': _id}, processed_item, upsert=True)
+            spider.crawler.stats.inc_value('pipeline/txmongo/{}'.format(collection_name), spider=spider)
             defer.returnValue(item)
