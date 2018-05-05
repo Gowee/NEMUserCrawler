@@ -194,4 +194,4 @@ for each follower |    |parse_favorite_songs|
                 follow_type,
                 user_id,
                 offset + len(d[key_in_data])),
-                logging.INFO)
+                logging.DEBUG)

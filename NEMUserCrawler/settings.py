@@ -60,9 +60,10 @@ DOWNLOADER_MIDDLEWARES = {
 
 # Enable or disable extensions
 # See https://doc.scrapy.org/en/latest/topics/extensions.html
-#EXTENSIONS = {
+EXTENSIONS = {
 #    'scrapy.extensions.telnet.TelnetConsole': None,
-#}
+    'NEMUserCrawler.extensions.TxMongoLogStats': 0,
+}
 
 # Configure item pipelines
 # See https://doc.scrapy.org/en/latest/topics/item-pipeline.html
