@@ -22,17 +22,17 @@ class UserSpider(scrapy.Spider):
                   |              v
                   |    +---------+----------+
 for each follower |    |parse_favorite_songs|
-                  |    +---------+----------+
+    or following  |    +---------+----------+
                   |              |
                   |              v
                   |      +-------+-------+
-                  +------+parse_followers+<-+
+                  +------+ parse_follow  +<-+
                          +-------+-------+  |
                                  |          |
                                  +----------+
                                    if more
     """
-    database_name = "nem" # Used for TxMongoPipeline
+    database_name = "nem"  # Used for TxMongoPipeline
     name = "user"
     allowed_domains = [common.nem.HOST]
     start_urls = [common.nem.rel2abs("discover")]
@@ -43,7 +43,7 @@ for each follower |    |parse_favorite_songs|
         for user_id in response.xpath("//a[starts-with(@href, '/user/home')]/@href").re(r"(?<=id=)\d+"):
             # print(user_id)
             yield response.follow("user/home?id={}".format(user_id), callback=self.parse_user_page)
-            yield self.request_followers(response, user_id)
+            yield from self.request_follow(response, user_id)
 
     REGEX_USER_ID = re.compile(r".+user/home\?id=(?P<id>\d+)")
 
@@ -88,7 +88,9 @@ for each follower |    |parse_favorite_songs|
         up: UserProfile = response.meta.get('user_profile')
         try:
             if "喜欢的音乐" not in d['playlist'][0]['name']:
-                self.log("User {}({}) seems to have no Fav playlist. Name of the first playlist: {}".format(up['name'], up['id'], d['playlist'][0]['name']),
+                self.log("User {}({}) seems to have no Fav playlist."
+                         " Name of the first playlist: {}".format(
+                             up['name'], up['id'], d['playlist'][0]['name']),
                          logging.WARNING)
             #print(up['name'], d['playlist'][0]['name'])
             yield response.follow("/playlist?id={}".format(d['playlist'][0]['id']),
@@ -98,8 +100,10 @@ for each follower |    |parse_favorite_songs|
                                         'final_stage': True},
                                   priority=30)
         except (KeyError, json.decoder.JSONDecodeError) as e:
-            self.logger.warn("Malformed response body ({}) when parsing the playlists of user {}.", e, up)
-            yield self.request_playlists(response, up) # retry
+            self.log(
+                "{!r} when parsing the playlists of user {}.".format(e, up),
+                logging.WARNING)
+            yield self.request_playlists(response, up)  # retry
             # self.log("Error when parsing the playlists of user {}({}): .".format(
             #     up['name'], up['id']), d, logging.WARNING)
 
@@ -107,7 +111,8 @@ for each follower |    |parse_favorite_songs|
         up: UserProfile = response.meta.get('user_profile')
         fav_songs = []
         for song in response.xpath("//ul[@class='f-hide']/li/a"):
-            song_ = Song(id=int(song.xpath("@href").re("id=(.+)")[0]), name=song.xpath("text()").extract_first())
+            song_ = Song(id=int(song.xpath("@href").re("id=(.+)")
+                                [0]), name=song.xpath("text()").extract_first())
             yield song_
             fav_songs.append(song_['id'])
         up['favorite_songs'] = fav_songs
@@ -117,28 +122,45 @@ for each follower |    |parse_favorite_songs|
         raise NotImplementedError
         yield json.loads(response.body.decode("utf-8"))
 
-    def request_followers(self, response, user_id, offset=0, limit=100):
-        return response.follow("/weapi/user/getfolloweds?csrf_token=",
+    def request_follows(self, *args, **kwargs):
+        """Requests generator for the followers and the following. (Using `yield from`.)"""
+        for follow_type in ["following", "followers"]:
+            # request followers and following of the user
+            yield self.request_follow(follow_type, *args, **kwargs) 
+
+    def request_follow(self, follow_type, response, user_id, offset=0, limit=100):
+        """Request generator for followers or following according to `follow_type`."""
+        url = {'following': "/weapi/user/getfollows/{}?csrf_token=",
+               'followers': "/weapi/user/getfolloweds?csrf_token="}[follow_type].format(user_id)
+        return response.follow(url,
                                method="POST",
                                headers={
                                    'Content-Type': "application/x-www-form-urlencoded"},
                                body=urlencode(common.nem.encrypt(
-                                   {"userId": user_id, "offset": str(
+                                   {"userId": str(user_id), "offset": str(
                                        offset), "total": "false", "limit": str(limit), "csrf_token": ""}
                                )),
-                               callback=self.parse_followers,
-                               meta={"followers_user_id": user_id,
-                                     "followers_offset": offset,
-                                     "followers_limit": limit},
+                               callback=self.parse_follow,
+                               meta={'follow_user_id': user_id,
+                                     'follow_offset': offset,
+                                     'follow_limit': limit,
+                                     'follow_type': follow_type},
                                priority=10)
 
     def parse_followers(self, response):
+        """Only existing for backward compatibility. Use `parse_follow` instead."""
+        response.meta['follow_type'] = "followers"
+        response.meta['follow_user_id'] = response.meta.get('follwers_user_id')
+        response.meta['follow_offset'] = response.meta.get('followers_offset')
+        response.meta['follow_limit'] = response.meta.get('followers_limit')
+        yield from self.parse_follow(response) 
+
+    def parse_follow(self, response):
         d = json.loads(response.body.decode("utf-8"))
-        if d['code'] != 200:
-            self.log(
-                "Error when parsing followers, error code: {}.".format(d['code']))
-            return
-        for follower in d['followeds']:
+        # 'followeds' for `request_followers`, `follow` for `request_following`
+        follow_type = response.meta.get("follow_type")
+        key_in_data = {'followers': "followeds", 'following': 'follow'}[follow_type]
+        for follower in d[key_in_data]:
             try:
                 up = UserProfile(
                     id=int(follower['userId']),
@@ -147,18 +169,29 @@ for each follower |    |parse_favorite_songs|
                     description=follower['signature']
                 )
                 yield self.request_playlists(response, up)
-                yield self.request_followers(response, up['id'])
+                yield from self.request_follows(response, up['id'])
             except KeyError as e:
                 self.log("Error when parsing followers, error {}.".format(
                     e), logging.WARNING)
 
-        user_id = response.meta.get("followers_user_id")
-        offset = response.meta.get("followers_offset")
-        limit = response.meta.get("followers_limit")
+        if len(d[key_in_data]) == response.meta.get("followers_limit") and d['more'] is False:
+            # This may happen when NEM change the restrict on their API.
+            self.logger.warn(
+                "The number of fetched following/ers does match against the given page size.")
+
+        user_id = response.meta.get("follow_user_id")
+        offset = len(d[key_in_data]) or response.meta.get("follow_offset")
+        limit = response.meta.get("follow_limit")
+        assert not (user_id is None or offset is None or limit is None)
         if d['more'] is True:
-            yield self.request_followers(response, user_id, offset + limit, limit)
+            self.log("Fetched {number} {follow_type} of {user_id}".format(number=limit,
+                                                                          follow_type=follow_type,
+                                                                          user_id=user_id),
+                     logging.DEBUG)
+            yield self.request_follow(follow_type, response, user_id, offset + limit, limit)
         else:
-            self.log("Finished iterating the followers of user ({}), {} total".format(
+            self.log("Finished iterating the {} of user ({}), {} total".format(
+                follow_type,
                 user_id,
-                offset + len(follower)),
+                offset + len(d[key_in_data])),
                 logging.INFO)
