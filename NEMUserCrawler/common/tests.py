@@ -6,7 +6,7 @@ from io import BytesIO
 from math import ceil
 
 from sparse_presence_table import SparsePresenceTable
-import nem_crypto
+import nem, nem_crypto
 
 
 class NEMAPICryptoTest(unittest.TestCase):
@@ -112,3 +112,15 @@ class SparsePresenceTableTest(unittest.TestCase):
                 for no in present:
                     self.assertIn(no, table)
             
+class test_nem(unittest.TestCase):
+    def test_is_weapi(self):
+        cases = [("http://music.163.com/weapi", True),
+                ("http://music.163.com/weapi/", True),
+                ("http://music.163.com/weapi/user/getfolloweds?csrf_token=", True),
+                ("https://music.163.com/weapi", True),
+                ("https://music.163.com/weapi/user/get", True),
+                ("https://music.164.com/weapi/user", False),
+                ("https://music.163.com/weiap/user", False),
+                ("http://music.163.com/#weapi/", False)]
+        for case in cases:
+            self.assertEqual(nem.is_weapi(case[0]), case[1])

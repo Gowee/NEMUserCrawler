@@ -32,7 +32,7 @@ for each follower |    |parse_favorite_songs|
                                  +----------+
                                    if more
     """
-    database_name = "nem"
+    database_name = "nem" # Used for TxMongoPipeline
     name = "user"
     allowed_domains = [common.nem.HOST]
     start_urls = [common.nem.rel2abs("discover")]
@@ -88,7 +88,7 @@ for each follower |    |parse_favorite_songs|
         up: UserProfile = response.meta.get('user_profile')
         try:
             if "喜欢的音乐" not in d['playlist'][0]['name']:
-                self.log("User {}({}) seems to have no Fav playlist. Name of the first playlist: {}".format(up.name, up.id, d['playlist'][0]['name']),
+                self.log("User {}({}) seems to have no Fav playlist. Name of the first playlist: {}".format(up['name'], up['id'], d['playlist'][0]['name']),
                          logging.WARNING)
             #print(up['name'], d['playlist'][0]['name'])
             yield response.follow("/playlist?id={}".format(d['playlist'][0]['id']),
@@ -97,9 +97,11 @@ for each follower |    |parse_favorite_songs|
                                   meta={'user_profile': up,
                                         'final_stage': True},
                                   priority=30)
-        except KeyError:
-            self.log("Error when parsing the playlists of user {}({}).".format(
-                up.name, up.id), logging.WARNING)
+        except (KeyError, json.decoder.JSONDecodeError) as e:
+            self.logger.warn("Malformed response body ({}) when parsing the playlists of user {}.", e, up)
+            yield self.request_playlists(response, up) # retry
+            # self.log("Error when parsing the playlists of user {}({}): .".format(
+            #     up['name'], up['id']), d, logging.WARNING)
 
     def parse_favorite_songs(self, response):
         up: UserProfile = response.meta.get('user_profile')
@@ -145,6 +147,7 @@ for each follower |    |parse_favorite_songs|
                     description=follower['signature']
                 )
                 yield self.request_playlists(response, up)
+                yield self.request_followers(response, up['id'])
             except KeyError as e:
                 self.log("Error when parsing followers, error {}.".format(
                     e), logging.WARNING)

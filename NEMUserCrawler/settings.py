@@ -52,9 +52,11 @@ CONCURRENT_REQUESTS_PER_DOMAIN = 16
 
 # Enable or disable downloader middlewares
 # See https://doc.scrapy.org/en/latest/topics/downloader-middleware.html
-#DOWNLOADER_MIDDLEWARES = {
-#    'NEMUserCrawler.middlewares.NemusercrawlerDownloaderMiddleware': 543,
-#}
+DOWNLOADER_MIDDLEWARES = {
+    'NEMUserCrawler.middlewares.NemusercrawlerDownloaderMiddleware': None,
+    'rotating_proxies.middlewares.RotatingProxyMiddleware': 610,
+    'rotating_proxies.middlewares.BanDetectionMiddleware': 620,
+}
 
 # Enable or disable extensions
 # See https://doc.scrapy.org/en/latest/topics/extensions.html
@@ -89,4 +91,16 @@ ITEM_PIPELINES = {
 #HTTPCACHE_IGNORE_HTTP_CODES = []
 #HTTPCACHE_STORAGE = 'scrapy.extensions.httpcache.FilesystemCacheStorage'
 
-JOBDIR= 'jobs'
+JOBDIR = '__jobs__'
+
+DOWNLOAD_TIMEOUT = 30
+
+RETRY_TIMES = 6
+RETRY_PRIORITY_ADJUST = 1
+
+ROTATING_PROXY_LIST_PATH = "./proxies.txt"
+ROTATING_PROXY_BAN_POLICY = 'NEMUserCrawler.policies.NEMWeAPIBanDetectionPolicy'
+ROTATING_PROXY_CLOSE_SPIDER = True
+ROTATING_PROXY_PAGE_RETRY_TIMES = 16
+
+RETRY_HTTP_CODES = [500, 502, 503, 504, 522, 524, 408, 403, 405, 404, 400]
