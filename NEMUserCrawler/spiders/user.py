@@ -97,7 +97,7 @@ for each follower |    |parse_favorite_songs|
                                   method="GET",
                                   callback=self.parse_favorite_songs,
                                   meta={'user_profile': up,
-                                        'final_stage': True},
+                                        'as_present': True},
                                   priority=30)
         except (KeyError, json.decoder.JSONDecodeError) as e:
             self.log(
@@ -148,7 +148,7 @@ for each follower |    |parse_favorite_songs|
                                priority=10)
 
     def parse_followers(self, response):
-        """Only existing for backward compatibility. Use `parse_follow` instead."""
+        """Only existing for backward compatibility. Use `request_follow` instead."""
         response.meta['follow_type'] = "followers"
         response.meta['follow_user_id'] = response.meta.get('follwers_user_id')
         response.meta['follow_offset'] = response.meta.get('followers_offset')

@@ -32,12 +32,19 @@ class NemUserIDFilter(BaseDupeFilter):
     def request_seen(self, request):
         up = request.meta.get('user_profile')
         if up is None:
-            # cannot recognize `request`, just allow it
-            # Note: this accutually suppress `RFPDupeFilter` which helps avoid looping requests
-            return False  # or None
-        if not request.meta.get('final_stage', False):
+            user_id = request.meta.get('follow_user_id')
+            if user_id is None:
+                # cannot recognize `request`, just allow it
+                # Note: this accutually suppress `RFPDupeFilter` which may help avoid looping requests
+                return False  # or None
+        else:
+            user_id = up['id']
+        if request.meta.get('do_not_filter', False):
             return False
-        return self.crawled_user_ids.present(up['id'])
+        elif request.meta.get('as_present', False):
+            return self.crawled_user_ids.present(user_id)
+        else:
+            return self.crawled_user_ids.is_present(user_id)
 
     def close(self, reason):
         if self.file_path:
