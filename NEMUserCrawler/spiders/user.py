@@ -43,7 +43,7 @@ for each follower |    |parse_favorite_songs|
         for user_id in response.xpath("//a[starts-with(@href, '/user/home')]/@href").re(r"(?<=id=)\d+"):
             # print(user_id)
             yield response.follow("user/home?id={}".format(user_id), callback=self.parse_user_page)
-            yield from self.request_follow(response, user_id)
+            yield from self.request_follow(response, response, user_id)
 
     REGEX_USER_ID = re.compile(r".+user/home\?id=(?P<id>\d+)")
 
