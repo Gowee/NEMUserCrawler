@@ -43,7 +43,7 @@ for each follower |    |parse_favorite_songs|
         for user_id in response.xpath("//a[starts-with(@href, '/user/home')]/@href").re(r"(?<=id=)\d+"):
             # print(user_id)
             yield response.follow("user/home?id={}".format(user_id), callback=self.parse_user_page)
-            yield from self.request_follow(response, response, user_id)
+            yield from self.request_follows(response, user_id)
 
     REGEX_USER_ID = re.compile(r".+user/home\?id=(?P<id>\d+)")
 
@@ -80,7 +80,9 @@ for each follower |    |parse_favorite_songs|
                                     "total": "true", "limit": "5", "csrf_token": ""}
                                )),
                                callback=self.parse_playlists,
-                               meta={'user_profile': user_profile},
+                               meta={
+                                   "filter_user_id": user_profile['id'],
+                                   'user_profile': user_profile},
                                priority=20)
 
     def parse_playlists(self, response):
@@ -96,9 +98,11 @@ for each follower |    |parse_favorite_songs|
             yield response.follow("/playlist?id={}".format(d['playlist'][0]['id']),
                                   method="GET",
                                   callback=self.parse_favorite_songs,
-                                  meta={'user_profile': up,
-                                        'as_present': True},
-                                  priority=30)
+                                  meta={
+                                      'filter_user_id': up['id'],
+                                      'user_profile': up,
+                'as_present': True},
+                priority=30)
         except (KeyError, json.decoder.JSONDecodeError) as e:
             self.log(
                 "{!r} when parsing the playlists of user {}.".format(e, up),
@@ -126,7 +130,7 @@ for each follower |    |parse_favorite_songs|
         """Requests generator for the followers and the following. (Using `yield from`.)"""
         for follow_type in ["following", "followers"]:
             # request followers and following of the user
-            yield self.request_follow(follow_type, *args, **kwargs) 
+            yield self.request_follow(follow_type, *args, **kwargs)
 
     def request_follow(self, follow_type, response, user_id, offset=0, limit=100):
         """Request generator for followers or following according to `follow_type`."""
@@ -141,7 +145,8 @@ for each follower |    |parse_favorite_songs|
                                        offset), "total": "false", "limit": str(limit), "csrf_token": ""}
                                )),
                                callback=self.parse_follow,
-                               meta={'follow_user_id': user_id,
+                               meta={'filter_user_id': user_id,
+                                     'follow_user_id': user_id,
                                      'follow_offset': offset,
                                      'follow_limit': limit,
                                      'follow_type': follow_type},
@@ -153,13 +158,14 @@ for each follower |    |parse_favorite_songs|
         response.meta['follow_user_id'] = response.meta.get('follwers_user_id')
         response.meta['follow_offset'] = response.meta.get('followers_offset')
         response.meta['follow_limit'] = response.meta.get('followers_limit')
-        yield from self.parse_follow(response) 
+        yield from self.parse_follow(response)
 
     def parse_follow(self, response):
         d = json.loads(response.body.decode("utf-8"))
         # 'followeds' for `request_followers`, `follow` for `request_following`
         follow_type = response.meta.get("follow_type")
-        key_in_data = {'followers': "followeds", 'following': 'follow'}[follow_type]
+        key_in_data = {'followers': "followeds",
+                       'following': 'follow'}[follow_type]
         for follower in d[key_in_data]:
             try:
                 up = UserProfile(

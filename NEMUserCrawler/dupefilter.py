@@ -30,15 +30,12 @@ class NemUserIDFilter(BaseDupeFilter):
         return cls(job_dir(settings), debug)
 
     def request_seen(self, request):
-        up = request.meta.get('user_profile')
-        if up is None:
-            user_id = request.meta.get('follow_user_id')
-            if user_id is None:
-                # cannot recognize `request`, just allow it
-                # Note: this accutually suppress `RFPDupeFilter` which may help avoid looping requests
-                return False  # or None
-        else:
-            user_id = up['id']
+        user_id = request.meta.get('filter_user_id')
+        if user_id is None:
+            # cannot recognize `request`, just allow it
+            # Note: this accutually suppress `RFPDupeFilter` which may help avoid looping requests
+            return False  # or None
+        user_id = int(user_id)
         if request.meta.get('do_not_filter', False):
             return False
         elif request.meta.get('as_present', False):
@@ -54,17 +51,23 @@ class NemUserIDFilter(BaseDupeFilter):
                 self.crawled_user_ids.dump_to_file(file)
 
     def log(self, request, spider):
-        up = request.meta.get('user_profile')
+        user_id = request.meta.get('filter_user_id')
+        user_profile = request.meta.get('user_profile')
+        if user_profile is None:
+            user_name = "UNKNOWN"
+        else:
+            user_name = user_profile['name']
         if self.debug:
-            msg = "Skipped crawled user: %(user_name)s(%(user_id)s)"
-            self.logger.debug(msg, {'user_name': up['name'], 'user_id': up['id']},
+            msg = "Skipped request associated with user: %(user_name)s(%(user_id)s)"
+            self.logger.debug(msg, {'user_name': user_name, 'user_id': user_id},
                               extra={'spider': spider})
         elif self.logdupes:
-            msg = ("Skipped crawled user: %(user_name)s(%(user_id)s)"
+            msg = ("Skipped request associated with user:: %(user_name)s(%(user_id)s)"
                    " - no more duplicates will be shown"
                    " (see DUPEFILTER_DEBUG to show all duplicates)")
-            self.logger.debug(msg, {'user_name': up['name'], 'user_id': up['id']},
+            self.logger.debug(msg, {'user_name': user_name, 'user_id': user_id},
                               extra={'spider': spider})
             self.logdupes = False
 
-        spider.crawler.stats.inc_value('dupefilter/NemUserIDFilter/filtered', spider=spider)
+        spider.crawler.stats.inc_value(
+            'dupefilter/NemUserIDFilter/filtered', spider=spider)
