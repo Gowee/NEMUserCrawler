@@ -41,8 +41,7 @@ class TxMongoPipeline(object):
     def open_spider(self, spider):
         try:
             # TODO: get db_name from `spider.name`
-            pass # TODO: temp hack for test
-            # self.db_name = spider.database_name or self.db_name
+            self.db_name = spider.database_name or self.db_name
         except AttributeError:
             pass
         if self.db_name is None:
