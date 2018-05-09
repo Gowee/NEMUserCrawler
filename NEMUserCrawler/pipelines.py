@@ -49,16 +49,18 @@ class TxMongoPipeline(object):
                 "It can be specified thru `MONGO_URI` or `MONGO_DB` in settings"\
                 " or the `database_name` attribute of spiders".format(
                     self.__class__.__name__)
-            self.logger(e)
+            self.logger.error(e)
             raise NotConfigured(e)
-        self.logger.info("TxMongoPipeline activated, uri: {}, database: {}.".format(self.mongo_uri, self.db_name))
+        self.logger.info("TxMongoPipeline activated, uri: {}, database: {}, buffer size: {}.".format(self.mongo_uri, self.db_name, self.buffer_size))
         self.connection = yield txmongo.connection.ConnectionPool(self.mongo_uri)
         self.db = self.connection[self.db_name]
 
     @defer.inlineCallbacks
     def close_spider(self, spider):
-        yield self.flush_buffer()
-        yield self.connection.disconnect()
+        if self.buffer:
+            yield self.flush_buffer()
+        if self.connection:
+            yield self.connection.disconnect()
 
     @defer.inlineCallbacks
     def process_item(self, item, spider):
@@ -93,14 +95,14 @@ class TxMongoPipeline(object):
         else:
             # buffer disabled
             if upsert:
+                result = yield self.db[collection_name].update({'_id': _id}, processed_item, upsert=True)
+            else:
                 try:
                     result = yield self.db[collection_name].insert_one(processed_item)
                 except DuplicateKeyError as e:
                     self.logger.warn("{!r} raised when handling {}: {}. "
                                      "Consider using `to__id` with `upsert=True`".format(e, collection_name, processed_item))
                     result = e
-            else:
-                result = yield self.db[collection_name].update({'_id': _id}, processed_item, upsert=True)
         spider.crawler.stats.inc_value(
             'pipeline/txmongo/{}'.format(collection_name), spider=spider)
         defer.returnValue(item)
