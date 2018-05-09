@@ -29,8 +29,20 @@ class NemUserIDFilter(BaseDupeFilter):
         debug = settings.getbool('DUPEFILTER_DEBUG')
         return cls(job_dir(settings), debug)
 
+    @staticmethod
+    def extract_user_id(request):
+        """Exists for backward-compatibility."""
+        up = request.meta.get('user_profile')
+        if up is None:
+            user_id = request.meta.get('follow_user_id')
+            if user_id is None:
+                return None
+        else:
+            user_id = up['id']
+        return user_id
+
     def request_seen(self, request):
-        user_id = request.meta.get('filter_user_id')
+        user_id = request.meta.get('filter_user_id') or self.extract_user_id(request)
         if user_id is None:
             # cannot recognize `request`, just allow it
             # Note: this accutually suppress `RFPDupeFilter` which may help avoid looping requests
@@ -51,7 +63,7 @@ class NemUserIDFilter(BaseDupeFilter):
                 self.crawled_user_ids.dump_to_file(file)
 
     def log(self, request, spider):
-        user_id = request.meta.get('filter_user_id')
+        user_id = request.meta.get('filter_user_id') or self.extract_user_id(request)
         user_profile = request.meta.get('user_profile')
         if user_profile is None:
             user_name = "UNKNOWN"
