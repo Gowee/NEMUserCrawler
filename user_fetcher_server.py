@@ -16,6 +16,9 @@ def str_between(s, left, right):
         return ""
 
 
+NEM_URL = "https://music.163.com"
+
+
 async def get(session: aiohttp.ClientSession, *args, **kwargs):
     async with session.get(*args, **kwargs) as response:
         return await response.text()
@@ -36,8 +39,8 @@ SONGS_LIST = re.compile(
 async def fetch_user(user_id):
     try:
         async with aiohttp.ClientSession(headers={'User-Agent': "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.103 Safari/537.36"}) as session:
-            result = await get(session, "https://music.163.com/user/home?id={}".format(user_id))
-            if '<p class="note s-fc3">很抱歉，你要查找的网页找不到</p>' not in result:
+            result = await get(session, NEM_URL + "/user/home?id={}".format(user_id))
+            if '<p class="note s-fc3">很抱歉，你要查找的网页找不到</p>' in result:
                 return False, "USER_NOT_EXISTING"
             d = json.loads(str_between(
                 result, '<script type="application/ld+json">', '</script>'))
@@ -49,7 +52,7 @@ async def fetch_user(user_id):
             }
 
             result = await post(session,
-                                "https://music.163.com/weapi/user/playlist?csrf_token=",
+                                NEM_URL + "/weapi/user/playlist?csrf_token=",
                                 headers={
                                     'Content-Type': "application/x-www-form-urlencoded"},
                                 data=urlencode(nem_encrypt(
@@ -60,7 +63,7 @@ async def fetch_user(user_id):
             if "喜欢的音乐" not in d['playlist'][0]['name']:
                 raise ValueError
 
-            result = await get(session, "https://music.163.com/playlist?id={}".format(d['playlist'][0]['id']))
+            result = await get(session, NEM_URL + "/playlist?id={}".format(d['playlist'][0]['id']))
             result = str_between(result, '<ul class="f-hide">', '</ul>')
             songs = []
             for song_match in SONGS_LIST.finditer(result):
@@ -96,7 +99,7 @@ async def search_user(name, limit=100, offset=0):
     try:
         async with aiohttp.ClientSession(headers={'User-Agent': "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.103 Safari/537.36"}) as session:
             result = await post(session,
-                                "https://music.163.com/weapi/search/get?csrf_token=",
+                                NEM_URL + "/weapi/search/get?csrf_token=",
                                 headers={
                                     'Content-Type': "application/x-www-form-urlencoded"},
                                 data=urlencode(nem_encrypt(
