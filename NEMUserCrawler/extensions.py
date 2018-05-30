@@ -26,3 +26,7 @@ class TxMongoLogStats(LogStats):
                 msg = "TxMongoPipeline stored %(amount)d %(name)s (at %(rate)d /min)"
                 log_args = {'amount': v, 'name': k[len(self.PREFIX):], 'rate': rate}
                 logger.info(msg, log_args, extra={'spider': spider})
+
+    def spider_closed(self, spider, reason):
+        
+        super().spider_closed(spider, reason)
