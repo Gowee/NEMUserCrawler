@@ -6,6 +6,7 @@ import asyncio
 from urllib.parse import urlencode
 from NEMUserCrawler.common.nem_crypto import encrypt as nem_encrypt
 
+
 def str_between(s, left, right):
     try:
         start = s.index(left) + len(left)
@@ -36,6 +37,8 @@ async def fetch_user(user_id):
     try:
         async with aiohttp.ClientSession(headers={'User-Agent': "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.103 Safari/537.36"}) as session:
             result = await get(session, "https://music.163.com/user/home?id={}".format(user_id))
+            if '<p class="note s-fc3">很抱歉，你要查找的网页找不到</p>' not in result:
+                return False, "USER_NOT_EXISTING"
             d = json.loads(str_between(
                 result, '<script type="application/ld+json">', '</script>'))
             user_profile = {
@@ -69,7 +72,7 @@ async def fetch_user(user_id):
         return False, "UPSTREAM_INVALID_RESPONSE"
 
 
-async def user_fetcher(request):
+async def user_fetch(request):
     id = request.match_info.get('id')
     if id is None:
         return web.json_response({
@@ -88,8 +91,66 @@ async def user_fetcher(request):
             'error': result[1]
         })
 
+
+async def search_user(name, limit=100, offset=0):
+    try:
+        async with aiohttp.ClientSession(headers={'User-Agent': "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.103 Safari/537.36"}) as session:
+            result = await post(session,
+                                "https://music.163.com/weapi/search/get?csrf_token=",
+                                headers={
+                                    'Content-Type': "application/x-www-form-urlencoded"},
+                                data=urlencode(nem_encrypt(
+                                    {'s': name, 'limit': limit, 'csrf_token': "", 'type': 1002, 'offset': offset})))
+            d = json.loads(result)
+            user_profiles = []
+            for user_profile in d['result']['userprofiles']:
+                user_profiles.append({
+                    'id': user_profile['userId'],
+                    'name': user_profile['nickname'],
+                    'avatar_url': user_profile['avatarUrl']
+                })
+
+            return True, {
+                'total_count': d['result']['userprofileCount'],
+                'users': user_profiles
+            }
+    except Exception as e:
+        raise e
+        # return False, "UPSTREAM_INVALID_RESPONSE"
+
+
+async def user_search(request):
+    name = request.match_info.get('name')
+    limit = request.query.getone('limit', 100)
+    offset = request.query.getone('offset', 0)
+
+    if name is None:
+        return web.json_response({
+            'success': False,
+            'error': "INVALID_PARAM",
+        })
+    result = await search_user(name, limit, offset)
+    if result[0] == True:
+        return web.json_response({
+            'success': True,
+            'data': result[1]
+        })
+    else:
+        return web.json_response({
+            'success': False,
+            'error': result[1]
+        })
+
 app = web.Application()
 app.add_routes([web.get('/', index),
-                web.get('/user/fetch/{id}', user_fetcher)])
-
-web.run_app(app)
+                web.get('/user/fetch/{id}', user_fetch),
+                web.get('/user/search/{name}', user_search)])
+if __name__ == "__main__":
+    import sys
+    host, port = None, None
+    if len(sys.argv) == 2:
+        port = int(sys.argv[1])
+    elif len(sys.argv) == 3:
+        host = sys.argv[1]
+        port = int(sys.argv[2])
+    web.run_app(app, host=host, port=port)
