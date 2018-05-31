@@ -7,6 +7,10 @@ from urllib.parse import urlencode
 from NEMUserCrawler.common.nem_crypto import encrypt as nem_encrypt
 
 
+
+NEM_URL = "https://music.163.com"
+
+
 def str_between(s, left, right):
     try:
         start = s.index(left) + len(left)
@@ -15,14 +19,9 @@ def str_between(s, left, right):
     except ValueError:
         return ""
 
-
-NEM_URL = "https://music.163.com"
-
-
 async def get(session: aiohttp.ClientSession, *args, **kwargs):
     async with session.get(*args, **kwargs) as response:
         return await response.text()
-
 
 async def post(session: aiohttp.ClientSession, *args, **kwargs):
     async with session.post(*args, **kwargs) as response:
@@ -71,7 +70,7 @@ async def fetch_user(user_id):
                               song_match.group('song_name')))
             user_profile['favorite_songs'] = songs
             return True, user_profile
-    except (KeyError, ValueError, json.JSONDecodeError) as e:
+    except (KeyError, ValueError, json.JSONDecodeError, aiohttp.ClientError) as e:
         return False, "UPSTREAM_INVALID_RESPONSE"
 
 
@@ -117,9 +116,8 @@ async def search_user(name, limit=100, offset=0):
                 'total_count': d['result']['userprofileCount'],
                 'users': user_profiles
             }
-    except Exception as e:
-        raise e
-        # return False, "UPSTREAM_INVALID_RESPONSE"
+    except (KeyError, ValueError, json.JSONDecodeError, aiohttp.ClientError) as e:
+        return False, "UPSTREAM_INVALID_RESPONSE"
 
 
 async def user_search(request):
